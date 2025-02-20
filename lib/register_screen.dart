@@ -69,6 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('fullName', _fullNameController.text);
     await prefs.setString('email', _emailController.text);
+    print('Saved Full Name: ${_fullNameController.text}');
   }
 
   // ignore: unused_element
@@ -93,6 +94,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       await userCredential.user?.updateDisplayName(_fullNameController.text);
       await _saveUserData();
+      await Future.delayed(Duration(seconds: 1));
 
       if (mounted) {
         Navigator.pushReplacement(
