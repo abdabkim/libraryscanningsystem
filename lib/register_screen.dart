@@ -2,23 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:library_scanning_system/login_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 
-// Add AuthService class
 class AuthService {
   final _auth = FirebaseAuth.instance;
 
   Future<void> signup({
     required String email,
     required String password,
+    required String fullName,
     required BuildContext context,
   }) async {
     try {
-      await _auth.createUserWithEmailAndPassword(
+      final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      await userCredential.user?.updateDisplayName(fullName);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fullName', fullName);
+      print('Name saved to SharedPreferences: $fullName');
 
       if (context.mounted) {
         Navigator.pushReplacement(
@@ -45,14 +50,11 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _auth = FirebaseAuth.instance;
   final _formKey = GlobalKey<FormState>();
-
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-
   bool _showSpinner = false;
   String _errorMessage = '';
 
@@ -65,17 +67,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  Future<void> _saveUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fullName', _fullNameController.text);
-    await prefs.setString('email', _emailController.text);
-    print('Saved Full Name: ${_fullNameController.text}');
-  }
-
-  // ignore: unused_element
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() => _errorMessage = 'Passwords do not match');
       return;
@@ -86,36 +79,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _errorMessage = '';
     });
 
-    try {
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+    await AuthService().signup(
+      email: _emailController.text,
+      password: _passwordController.text,
+      fullName: _fullNameController.text,
+      context: context,
+    );
 
-      await userCredential.user?.updateDisplayName(_fullNameController.text);
-      await _saveUserData();
-      await Future.delayed(Duration(seconds: 1));
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _errorMessage = switch (e.code) {
-          'weak-password' => 'The password must be at least 6 characters',
-          'email-already-in-use' => 'This email is already registered',
-          'invalid-email' => 'Invalid email format',
-          _ => 'Registration failed: ${e.message}',
-        };
-      });
-    } catch (e) {
-      setState(() => _errorMessage = 'Registration failed: $e');
-    } finally {
-      if (mounted) setState(() => _showSpinner = false);
-    }
+    if (mounted) setState(() => _showSpinner = false);
   }
 
   @override
@@ -126,7 +97,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
       ),
-      backgroundColor: Colors.white,
       body: ModalProgressHUD(
         inAsyncCall: _showSpinner,
         child: SingleChildScrollView(
@@ -134,36 +104,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 24),
                 TextFormField(
                   controller: _fullNameController,
-                  textAlign: TextAlign.center,
                   decoration: kTextFieldDecoration.copyWith(
                     hintText: 'Enter your full name',
                     prefixIcon: const Icon(Icons.person),
                   ),
-                  validator: (value) => value?.isEmpty ?? true
-                      ? 'Please enter your full name'
-                      : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Please enter your full name' : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
-                  textAlign: TextAlign.center,
                   keyboardType: TextInputType.emailAddress,
                   decoration: kTextFieldDecoration.copyWith(
                     hintText: 'Enter your email',
                     prefixIcon: const Icon(Icons.email),
                   ),
                   validator: (value) {
-                    if (value?.isEmpty ?? true) {
-                      return 'Please enter your email';
-                    }
+                    if (value!.isEmpty) return 'Please enter your email';
                     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                        .hasMatch(value!)) {
+                        .hasMatch(value)) {
                       return 'Please enter a valid email';
                     }
                     return null;
@@ -173,15 +137,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  textAlign: TextAlign.center,
                   decoration: kTextFieldDecoration.copyWith(
                     hintText: 'Enter your password',
                     prefixIcon: const Icon(Icons.lock),
                   ),
                   validator: (value) {
-                    if (value?.isEmpty ?? true)
-                      return 'Please enter a password';
-                    if (value!.length < 6)
+                    if (value!.isEmpty) return 'Please enter a password';
+                    if (value.length < 6)
                       return 'Password must be at least 6 characters';
                     return null;
                   },
@@ -190,14 +152,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: true,
-                  textAlign: TextAlign.center,
                   decoration: kTextFieldDecoration.copyWith(
                     hintText: 'Confirm your password',
                     prefixIcon: const Icon(Icons.lock),
                   ),
-                  validator: (value) => value?.isEmpty ?? true
-                      ? 'Please confirm your password'
-                      : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Please confirm your password' : null,
                 ),
                 const SizedBox(height: 16),
                 if (_errorMessage.isNotEmpty)
@@ -212,23 +172,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 RoundedButton(
                   colour: Colors.blueAccent,
                   title: 'REGISTER',
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate()) {
-                      if (_passwordController.text !=
-                          _confirmPasswordController.text) {
-                        setState(
-                            () => _errorMessage = 'Passwords do not match');
-                        return;
-                      }
-                      setState(() => _showSpinner = true);
-                      await AuthService().signup(
-                        email: _emailController.text,
-                        password: _passwordController.text,
-                        context: context,
-                      );
-                      setState(() => _showSpinner = false);
-                    }
-                  },
+                  onPressed: _register,
                 ),
               ],
             ),
@@ -240,19 +184,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 }
 
 const kTextFieldDecoration = InputDecoration(
-  hintText: 'Enter a value',
+  border: OutlineInputBorder(),
   contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 20.0),
-  border: OutlineInputBorder(
-    borderRadius: BorderRadius.all(Radius.circular(32.0)),
-  ),
-  enabledBorder: OutlineInputBorder(
-    borderSide: BorderSide(color: Colors.blueAccent, width: 1.0),
-    borderRadius: BorderRadius.all(Radius.circular(32.0)),
-  ),
-  focusedBorder: OutlineInputBorder(
-    borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
-    borderRadius: BorderRadius.all(Radius.circular(32.0)),
-  ),
 );
 
 class RoundedButton extends StatelessWidget {

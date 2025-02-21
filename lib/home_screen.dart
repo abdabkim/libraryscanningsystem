@@ -10,30 +10,64 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _fullName = '';
+  String _fullName = 'User'; // Default value
   String _lockerStatus = 'Inactive';
   String _lockerTime = '--:--';
 
   @override
   void initState() {
     super.initState();
-    _getUserName();
+    _loadUserName();
   }
 
-  Future<void> _getUserName() async {
-    final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('fullName');
-    setState(() {
-      _fullName = name ?? 'User';
-    });
+  Future<void> _loadUserName() async {
+    try {
+      // Get SharedPreferences instance
+      final prefs = await SharedPreferences.getInstance();
+
+      // Try to get name from SharedPreferences first
+      String? storedName = prefs.getString('fullName');
+      print('Name from SharedPreferences: $storedName'); // Debug print
+
+      if (storedName != null && storedName.isNotEmpty) {
+        setState(() {
+          _fullName = storedName;
+          print(
+              'Setting name from SharedPreferences: $_fullName'); // Debug print
+        });
+        return;
+      }
+
+      // If not in SharedPreferences, try Firebase
+      final user = FirebaseAuth.instance.currentUser;
+      if (user?.displayName != null && user!.displayName!.isNotEmpty) {
+        setState(() {
+          _fullName = user.displayName!;
+          print('Setting name from Firebase: $_fullName'); // Debug print
+        });
+        // Save to SharedPreferences for future use
+        await prefs.setString('fullName', user.displayName!);
+        return;
+      }
+
+      // If we get here, no name was found
+      print('No name found in either location'); // Debug print
+    } catch (e) {
+      print('Error loading user name: $e');
+    }
   }
 
-  void _handleLogout(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    await FirebaseAuth.instance.signOut();
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, 'LoginScreen()');
+  Future<void> _handleLogout(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // Clear all stored data
+      await FirebaseAuth.instance.signOut();
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } catch (e) {
+      print('Error during logout: $e');
     }
   }
 
@@ -128,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _fullName.isEmpty ? 'Dashboard' : 'Welcome, $_fullName',
+          'Welcome, $_fullName',
           style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.blue.shade700,

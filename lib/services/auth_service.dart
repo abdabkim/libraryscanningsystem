@@ -3,15 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:library_scanning_system/home_screen.dart';
 import 'package:library_scanning_system/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  Future<void> register(
-      {required String email,
-      required String password,
-      required BuildContext context}) async {
+  Future<void> register({
+    required String email,
+    required String password,
+    required String fullName, // Added fullName parameter
+    required BuildContext context,
+  }) async {
     try {
-      await FirebaseAuth.instance
+      // Create the user
+      final userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
+
+      // Save the display name to Firebase
+      await userCredential.user?.updateDisplayName(fullName);
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fullName', fullName);
+
+      print('Name saved to SharedPreferences: $fullName'); // Debug print
 
       await Future.delayed(const Duration(seconds: 1));
       Navigator.pushReplacement(
@@ -33,7 +46,9 @@ class AuthService {
         textColor: Colors.white,
         fontSize: 14.0,
       );
-    } catch (e) {}
+    } catch (e) {
+      print('Error during registration: $e'); // Debug print
+    }
   }
 
   Future<void> login(
@@ -41,8 +56,17 @@ class AuthService {
       required String password,
       required BuildContext context}) async {
     try {
+      // Fix the method name typo and call
       await FirebaseAuth.instance
-          .loginInWithEmailAndPassword(email: email, password: password);
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      // After successful login, get user's name and save to SharedPreferences
+      final user = FirebaseAuth.instance.currentUser;
+      if (user?.displayName != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fullName', user!.displayName!);
+        print('Name saved during login: ${user.displayName}'); // Debug print
+      }
 
       await Future.delayed(const Duration(seconds: 1));
       Navigator.pushReplacement(
@@ -64,18 +88,29 @@ class AuthService {
         textColor: Colors.white,
         fontSize: 14.0,
       );
-    } catch (e) {}
+    } catch (e) {
+      print('Error during login: $e'); // Debug print
+    }
   }
 
   Future<void> signout({required BuildContext context}) async {
-    await FirebaseAuth.instance.signOut();
-    await Future.delayed(const Duration(seconds: 1));
-    Navigator.pushReplacement(context,
-        MaterialPageRoute(builder: (BuildContext context) => LoginScreen()));
+    try {
+      await FirebaseAuth.instance.signOut();
+
+      // Clear SharedPreferences data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('fullName');
+
+      await Future.delayed(const Duration(seconds: 1));
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (BuildContext context) => LoginScreen()));
+    } catch (e) {
+      print('Error during signout: $e'); // Debug print
+    }
   }
 }
 
-extension on FirebaseAuth {
-  loginInWithEmailAndPassword(
-      {required String email, required String password}) {}
-}
+// Remove this extension as we're using the correct signInWithEmailAndPassword method
+// extension on FirebaseAuth {
+//   loginInWithEmailAndPassword({required String email, required String password}) {}
+// }
