@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:library_scanning_system/profile_page.dart';
 import 'package:library_scanning_system/settings_page.dart';
+import 'package:library_scanning_system/status_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -329,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushReplacementNamed(context, 'LoginScreen()');
       }
     } catch (e) {
       print('Error during logout: $e');
@@ -556,6 +557,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> _pages = [
       _buildHomePage(),
       ProfilePage(),
+      StatusPage(),
       SettingsPage(),
     ];
 
@@ -599,6 +601,10 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.person),
             label: 'Profile',
           ),
+           BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Status',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
@@ -609,120 +615,334 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomePage() {
-    return Container(
-      // Background image container with adjusted settings for better quality
-      decoration: const BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage("assets/bg.jpg"),
-          fit: BoxFit.cover,
-          // Reduced opacity for better text readability
-          colorFilter: ColorFilter.mode(Colors.black12, BlendMode.darken),
-        ),
-      ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildInfoCard(
-                'Locker Availability',
-                'Scan ID\nCheck your locker Information',
-                Icons.qr_code,
-                () => _showQRScanner(context, 'Locker'),
-              ),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                'Arrival ID',
-                'Scan ID\nArrival and departure',
-                Icons.qr_code_scanner,
-                () => _showQRScanner(context, 'Arrival'),
-              ),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                'Select Date',
-                'Choose date for reservations\nCurrent date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
-                Icons.calendar_month,
-                () => _selectDate(context),
-              ),
-              const SizedBox(height: 16),
-              _buildLockerDashboard(),
-              const SizedBox(height: 16),
-              _buildInfoCard(
-                'Library Reservation System and Status Page',
-                'View available slots & rooms',
-                Icons.library_books,
-                () => _showLibraryReservation(context),
-              ),
-              // Extra space to ensure bottom content isn't hidden by nav bar
-              const SizedBox(height: 80),
-            ],
+    return Stack(
+      children: [
+        // Background with blue gradient
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A237E), // Deep blue
+                Color(0xFF1E88E5), // Medium blue
+              ],
+              stops: const [0.2, 1.0],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(
-      String title, String description, IconData icon, VoidCallback onPressed) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      // Making card slightly transparent but more opaque for better readability
-      color: Colors.white.withOpacity(0.95),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.blue, size: 32),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(description),
-        trailing: IconButton(
-          icon: const Icon(Icons.arrow_forward_ios, size: 20),
-          onPressed: onPressed,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLockerDashboard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      // Making card slightly transparent to see background
-      color: Colors.white.withOpacity(0.95),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Active Locker Dashboard',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        // Image positioned on bottom half with curve
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: MediaQuery.of(context).size.height * 0.55,
+          child: ClipPath(
+            clipper: BackgroundImageClipper(),
+            child: Image.asset(
+              'assets/bg.jpg',
+              fit: BoxFit.cover,
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ),
+        ),
+        // Content
+        SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Locker Status:',
-                  style: TextStyle(fontSize: 16),
+                _buildInfoCardVariant(
+                  'Locker Availability',
+                  'Scan ID\nCheck your locker Information',
+                  Icons.qr_code,
+                  () => _showQRScanner(context, 'Locker'),
+                  Colors.purple.withOpacity(0.3),
+                  alignment: Alignment.topRight,
+                  height: 120,
                 ),
-                Chip(
-                  label: Text(_lockerTime,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  backgroundColor:
-                      _lockerStatus == 'Active' ? Colors.blue : Colors.grey,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: _buildInfoCardVariant(
+                        'Arrival ID',
+                        'Scan ID\nArrival & departure',
+                        Icons.qr_code_scanner,
+                        () => _showQRScanner(context, 'Arrival'),
+                        Colors.teal.withOpacity(0.3),
+                        alignment: Alignment.centerLeft,
+                        height: 145,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: _buildInfoCardVariant(
+                        'Select Date',
+                        'Current: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
+                        Icons.calendar_month,
+                        () => _selectDate(context),
+                        Colors.indigo.withOpacity(0.3),
+                        height: 145,
+                        alignment: Alignment.center,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 16),
+                _buildLockerDashboardVariant(),
+                const SizedBox(height: 16),
+                _buildInfoCardVariant(
+                  'Library Reservation',
+                  'View available slots & rooms',
+                  Icons.library_books,
+                  () => _showLibraryReservation(context),
+                  Colors.amber.withOpacity(0.3),
+                  alignment: Alignment.bottomLeft,
+                  height: 110,
+                ),
+                // Extra space to ensure bottom content isn't hidden by nav bar
+                const SizedBox(height: 80),
               ],
             ),
-            Text(
-              'Status: $_lockerStatus',
-              style: const TextStyle(fontSize: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoCardVariant(
+    String title,
+    String description,
+    IconData icon,
+    VoidCallback onPressed,
+    Color overlayColor, {
+    Alignment alignment = Alignment.center,
+    double height = 100,
+  }) {
+    return Container(
+      height: height,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        // Using a transparent card with a colored overlay
+        color: Colors.white.withOpacity(0.85),
+        child: Stack(
+          children: [
+            // Colored overlay with gradient
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      overlayColor.withOpacity(0.1),
+                      overlayColor,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, color: Colors.blue.shade800, size: 28),
+                      const SizedBox(width: 10),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: Colors.blue.shade900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Make the entire card clickable
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onPressed,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+            // Arrow icon
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: Icon(
+                Icons.arrow_forward,
+                color: Colors.blue.shade800,
+                size: 20,
+              ),
             ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildLockerDashboardVariant() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: Colors.white.withOpacity(0.85),
+      child: Stack(
+        children: [
+          // Colored overlay with gradient
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.blue.withOpacity(0.1),
+                    Colors.blue.withOpacity(0.3),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Active Locker Dashboard',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                    Chip(
+                      label: Text(_lockerTime,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                      backgroundColor: _lockerStatus == 'Active'
+                          ? Colors.blue.shade800
+                          : Colors.grey,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Status: $_lockerStatus',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            buildStatColumn('Total', '$_totalLockers',
+                                Colors.blue.shade900),
+                            const SizedBox(width: 16),
+                            buildStatColumn('Available', '$_availableLockers',
+                                Colors.green),
+                            const SizedBox(width: 16),
+                            buildStatColumn(
+                                'In Use',
+                                '$_usedLockers',
+                                _usedLockers >= _totalLockers
+                                    ? Colors.red
+                                    : Colors.blue.shade700),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Icon(
+                      Icons.lock_outline,
+                      color: _lockerStatus == 'Active'
+                          ? Colors.blue.shade800
+                          : Colors.grey,
+                      size: 40,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildStatColumn(String label, String value, Color valueColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.blue.shade900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Custom clipper for curved background image in bottom half
+class BackgroundImageClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, size.height * 0.3); // Start from 30% down on left side
+    path.quadraticBezierTo(
+        size.width * 0.3, 0, size.width * 0.6, 0); // Curve upward
+    path.lineTo(size.width, 0); // Top right corner
+    path.lineTo(size.width, size.height); // Bottom right corner
+    path.lineTo(0, size.height); // Bottom left corner
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => true;
 }
