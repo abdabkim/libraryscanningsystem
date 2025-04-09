@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:library_scanning_system/login_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -49,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Get SharedPreferences instance
       final prefs = await SharedPreferences.getInstance();
 
-      // Try to get name from SharedPreferences first
+      
       String? storedName = prefs.getString('fullName');
       print('Name from SharedPreferences: $storedName'); // Debug print
 
@@ -62,7 +63,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // If not in SharedPreferences, try Firebase
       final user = FirebaseAuth.instance.currentUser;
       if (user?.displayName != null && user!.displayName!.isNotEmpty) {
         setState(() {
@@ -323,14 +323,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _handleLogout(BuildContext context) async {
+ Future<void> _handleLogout(BuildContext context) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear(); // Clear all stored data
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, 'LoginScreen()');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
       }
     } catch (e) {
       print('Error during logout: $e');

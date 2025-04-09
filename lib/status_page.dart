@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:library_scanning_system/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -63,27 +62,32 @@ class _StatusPageState extends State<StatusPage> {
 
   Future<void> _loadUserName() async {
     try {
-      // Get SharedPreferences instance
-      final prefs = await SharedPreferences.getInstance();
-
-      // Try to get name from SharedPreferences first
-      String? storedName = prefs.getString('fullName');
-
-      if (storedName != null && storedName.isNotEmpty) {
-        setState(() {
-          _fullName = storedName;
-        });
-        return;
-      }
-
-      // If not in SharedPreferences, try Firebase
+      // Try to get name from Firebase Auth
       final user = FirebaseAuth.instance.currentUser;
-      if (user?.displayName != null && user!.displayName!.isNotEmpty) {
-        setState(() {
-          _fullName = user.displayName!;
-        });
-        // Save to SharedPreferences for future use
-        await prefs.setString('fullName', user.displayName!);
+      if (user != null) {
+        // First check display name
+        if (user.displayName != null && user.displayName!.isNotEmpty) {
+          setState(() {
+            _fullName = user.displayName!;
+          });
+          return;
+        }
+
+        // If display name not available, try to fetch from Firestore users collection
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+          if (userDoc.exists && userDoc.data()?['fullName'] != null) {
+            setState(() {
+              _fullName = userDoc.data()!['fullName'];
+            });
+          }
+        } catch (e) {
+          print('Error fetching user profile from Firestore: $e');
+        }
       }
     } catch (e) {
       print('Error loading user name: $e');
@@ -104,49 +108,20 @@ class _StatusPageState extends State<StatusPage> {
 
   Future<void> _loadLockerHistory() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final formattedToday = DateFormat('yyyy-MM-dd').format(_today);
       _lockerHistory = [];
 
-      // Try to get from SharedPreferences first
-      final historyJson = prefs.getString('lockerHistory');
-      if (historyJson != null) {
-        final List<dynamic> history = jsonDecode(historyJson);
-        for (var item in history) {
-          if (item['date'] == formattedToday) {
-            _lockerHistory.add(Map<String, dynamic>.from(item));
-          }
-        }
-      }
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('lockerHistory')
+            .where('date', isEqualTo: formattedToday)
+            .get();
 
-      // If empty or not available, try Firebase
-      if (_lockerHistory.isEmpty) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final querySnapshot = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('lockerHistory')
-              .where('date', isEqualTo: formattedToday)
-              .get();
-
-          for (var doc in querySnapshot.docs) {
-            _lockerHistory.add(doc.data());
-          }
-
-          // Save to SharedPreferences for offline access
-          if (_lockerHistory.isNotEmpty) {
-            List<dynamic> allHistory = [];
-            final allHistoryJson = prefs.getString('lockerHistory');
-            if (allHistoryJson != null) {
-              allHistory = jsonDecode(allHistoryJson);
-              // Remove entries for this date to avoid duplicates
-              allHistory.removeWhere((item) => item['date'] == formattedToday);
-            }
-            // Add new entries
-            allHistory.addAll(_lockerHistory);
-            prefs.setString('lockerHistory', jsonEncode(allHistory));
-          }
+        for (var doc in querySnapshot.docs) {
+          _lockerHistory.add(doc.data());
         }
       }
     } catch (e) {
@@ -157,49 +132,20 @@ class _StatusPageState extends State<StatusPage> {
 
   Future<void> _loadRoomHistory() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final formattedToday = DateFormat('yyyy-MM-dd').format(_today);
       _roomHistory = [];
 
-      // Try to get from SharedPreferences first
-      final historyJson = prefs.getString('roomHistory');
-      if (historyJson != null) {
-        final List<dynamic> history = jsonDecode(historyJson);
-        for (var item in history) {
-          if (item['date'] == formattedToday) {
-            _roomHistory.add(Map<String, dynamic>.from(item));
-          }
-        }
-      }
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('roomHistory')
+            .where('date', isEqualTo: formattedToday)
+            .get();
 
-      // If empty or not available, try Firebase
-      if (_roomHistory.isEmpty) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final querySnapshot = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('roomHistory')
-              .where('date', isEqualTo: formattedToday)
-              .get();
-
-          for (var doc in querySnapshot.docs) {
-            _roomHistory.add(doc.data());
-          }
-
-          // Save to SharedPreferences for offline access
-          if (_roomHistory.isNotEmpty) {
-            List<dynamic> allHistory = [];
-            final allHistoryJson = prefs.getString('roomHistory');
-            if (allHistoryJson != null) {
-              allHistory = jsonDecode(allHistoryJson);
-              // Remove entries for this date to avoid duplicates
-              allHistory.removeWhere((item) => item['date'] == formattedToday);
-            }
-            // Add new entries
-            allHistory.addAll(_roomHistory);
-            prefs.setString('roomHistory', jsonEncode(allHistory));
-          }
+        for (var doc in querySnapshot.docs) {
+          _roomHistory.add(doc.data());
         }
       }
     } catch (e) {
@@ -627,9 +573,7 @@ class _StatusPageState extends State<StatusPage> {
   Widget _buildLockerHistoryItem(int index, Map<String, dynamic> usage) {
     final timestamp = usage['timestamp'] is Timestamp
         ? (usage['timestamp'] as Timestamp).toDate()
-        : usage['timestamp'] is String
-            ? DateTime.parse(usage['timestamp'])
-            : DateTime.now();
+        : DateTime.now();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -785,4 +729,20 @@ class BackgroundImageClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => true;
+}
+
+// Add a method to handle logout
+Future<void> handleLogout(BuildContext context) async {
+  try {
+    await FirebaseAuth.instance.signOut();
+
+    if (context.mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+      );
+    }
+  } catch (e) {
+    print('Error during logout: $e');
+  }
 }

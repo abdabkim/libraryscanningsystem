@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:library_scanning_system/login_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -379,7 +380,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
                       // Navigate to login page (fixed navigation)
                       if (context.mounted) {
-                        Navigator.pushReplacementNamed(context, 'LoginScreen');
+                      Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => LoginScreen()),
+                        );
                       }
 
                       if (context.mounted) {
