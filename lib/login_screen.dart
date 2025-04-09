@@ -47,9 +47,10 @@ class _LoginScreenState extends State<LoginScreen> {
       print('Name saved to SharedPreferences: $fullName');
 
       if (context.mounted) {
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
+                (route) => false
         );
       }
     } on FirebaseAuthException catch (e) {

@@ -61,7 +61,7 @@ class WelcomeScreen extends StatelessWidget {
                       ],
                     ),
                     child: const Text(
-                      'Welcome to the Library Scanning System, Welcome to the Library Scanning System, your smart solution for seamless check-ins, locker management, and real-time updates—enhancing convenience, security, and efficiency!',
+                      'Welcome to the Library Scanning System, your smart solution for seamless check-ins, locker management, and real-time updates—enhancing convenience, security, and efficiency!',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,

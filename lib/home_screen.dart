@@ -679,9 +679,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         height: 145,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 19),
                     Expanded(
-                      flex: 2,
+                      flex: 3,
                       child: _buildInfoCardVariant(
                         'Select Date',
                         'Current: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
