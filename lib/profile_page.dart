@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-// ignore: unused_import
-import 'dart:convert';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -16,8 +14,11 @@ class _ProfilePageState extends State<ProfilePage> {
   String _fullName = 'User';
   String _email = 'user@example.com';
   String _studyProgram = '';
+  String _schoolName = '';
   final _studyProgramController = TextEditingController();
-  bool _isEditing = false;
+  final _schoolNameController = TextEditingController();
+  bool _isEditingProgram = false;
+  bool _isEditingSchool = false;
 
   @override
   void initState() {
@@ -28,6 +29,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     _studyProgramController.dispose();
+    _schoolNameController.dispose();
     super.dispose();
   }
 
@@ -40,6 +42,7 @@ class _ProfilePageState extends State<ProfilePage> {
       String? storedName = prefs.getString('fullName');
       String? storedEmail = prefs.getString('email');
       String? storedProgram = prefs.getString('studyProgram');
+      String? storedSchool = prefs.getString('schoolName');
 
       if (storedName != null && storedName.isNotEmpty) {
         setState(() {
@@ -57,6 +60,13 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() {
           _studyProgram = storedProgram;
           _studyProgramController.text = storedProgram;
+        });
+      }
+
+      if (storedSchool != null) {
+        setState(() {
+          _schoolName = storedSchool;
+          _schoolNameController.text = storedSchool;
         });
       }
 
@@ -78,19 +88,32 @@ class _ProfilePageState extends State<ProfilePage> {
           prefs.setString('email', user.email!);
         }
 
-        // Try to get study program from Firestore
+        // Try to get study program and school name from Firestore
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .get();
 
-        if (userDoc.exists && userDoc.data()!.containsKey('studyProgram')) {
-          final program = userDoc.data()!['studyProgram'];
-          setState(() {
-            _studyProgram = program;
-            _studyProgramController.text = program;
-          });
-          prefs.setString('studyProgram', program);
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+
+          if (userData.containsKey('studyProgram')) {
+            final program = userData['studyProgram'];
+            setState(() {
+              _studyProgram = program;
+              _studyProgramController.text = program;
+            });
+            prefs.setString('studyProgram', program);
+          }
+
+          if (userData.containsKey('schoolName')) {
+            final school = userData['schoolName'];
+            setState(() {
+              _schoolName = school;
+              _schoolNameController.text = school;
+            });
+            prefs.setString('schoolName', school);
+          }
         }
       }
     } catch (e) {
@@ -117,7 +140,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       setState(() {
         _studyProgram = program;
-        _isEditing = false;
+        _isEditingProgram = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,6 +148,39 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     } catch (e) {
       print('Error saving study program: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _saveSchoolName() async {
+    try {
+      final school = _schoolNameController.text.trim();
+      final user = FirebaseAuth.instance.currentUser;
+
+      // Save to Firestore if user is logged in
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'schoolName': school,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      // Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      prefs.setString('schoolName', school);
+
+      setState(() {
+        _schoolName = school;
+        _isEditingSchool = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('School name updated successfully')),
+      );
+    } catch (e) {
+      print('Error saving school name: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -155,166 +211,205 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage("assets/bg.jpg"),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black12, BlendMode.darken),
-        ),
-      ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              // Profile picture placeholder
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.blue.shade700.withOpacity(0.8),
-                  border: Border.all(color: Colors.white, width: 3),
-                ),
-                child: const Icon(
-                  Icons.person,
-                  size: 80,
-                  color: Colors.white,
-                ),
+  Widget _buildEditableField(
+      String label,
+      bool isEditing,
+      TextEditingController controller,
+      String currentValue,
+      Function() onEdit,
+      Function() onSave,
+      Function() onCancel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$label:',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 24),
-              Card(
-                elevation: 4,
-                color: Colors.white.withOpacity(0.95),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            if (!isEditing)
+              TextButton(
+                onPressed: onEdit,
+                child: const Text('Edit'),
+              ),
+          ],
+        ),
+        isEditing
+            ? Column(
+                children: [
+                  TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your $label',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Text(
-                        'Profile Information',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
+                      TextButton(
+                        onPressed: onCancel,
+                        child: const Text('Cancel'),
                       ),
-                      const Divider(),
-                      _buildInfoRow('Full Name', _fullName),
-                      _buildInfoRow('Email', _email),
-                      _buildInfoRow('Status', 'NCU Student'),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Study Program:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (!_isEditing)
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _isEditing = true;
-                                });
-                              },
-                              child: const Text('Edit'),
-                            ),
-                        ],
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: onSave,
+                        child: const Text('Save'),
                       ),
-                      _isEditing
-                          ? Column(
-                              children: [
-                                TextField(
-                                  controller: _studyProgramController,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Enter your study program',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    TextButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          _isEditing = false;
-                                          _studyProgramController.text =
-                                              _studyProgram;
-                                        });
-                                      },
-                                      child: const Text('Cancel'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: _saveStudyProgram,
-                                      child: const Text('Save'),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.only(left: 16.0),
-                              child: Text(
-                                _studyProgram.isEmpty
-                                    ? 'Not specified'
-                                    : _studyProgram,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
                     ],
+                  ),
+                ],
+              )
+            : Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: Text(
+                  currentValue.isEmpty ? 'Not specified' : currentValue,
+                  style: const TextStyle(
+                    fontSize: 16,
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  try {
-                    await FirebaseAuth.instance.signOut();
+      ],
+    );
+  }
 
-                    // Clear user-specific data from SharedPreferences
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove('fullName');
-                    await prefs.remove('email');
-
-                    // Navigate to login page (you'll need to implement this)
-                    // Navigator.of(context).pushReplacementNamed('/login');
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Logged out successfully')),
-                    );
-                  } catch (e) {
-                    print('Error signing out: $e');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error signing out: $e')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text('Sign Out'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        height: MediaQuery.of(context).size.height,
+        width: MediaQuery.of(context).size.width,
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage("assets/bg.jpg"),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(Colors.black12, BlendMode.darken),
+          ),
+        ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+                Card(
+                  elevation: 4,
+                  color: Colors.white.withOpacity(0.95),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Profile Information',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const Divider(),
+                        _buildInfoRow('Full Name', _fullName),
+                        _buildInfoRow('Email', _email),
+                        _buildInfoRow('Status', 'NCU Student'),
+                        const SizedBox(height: 16),
+                        _buildEditableField(
+                          'Study Program',
+                          _isEditingProgram,
+                          _studyProgramController,
+                          _studyProgram,
+                          () {
+                            setState(() {
+                              _isEditingProgram = true;
+                            });
+                          },
+                          _saveStudyProgram,
+                          () {
+                            setState(() {
+                              _isEditingProgram = false;
+                              _studyProgramController.text = _studyProgram;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        _buildEditableField(
+                          'School Name',
+                          _isEditingSchool,
+                          _schoolNameController,
+                          _schoolName,
+                          () {
+                            setState(() {
+                              _isEditingSchool = true;
+                            });
+                          },
+                          _saveSchoolName,
+                          () {
+                            setState(() {
+                              _isEditingSchool = false;
+                              _schoolNameController.text = _schoolName;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await FirebaseAuth.instance.signOut();
+
+                      // Clear user-specific data from SharedPreferences
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.remove('fullName');
+                      await prefs.remove('email');
+                      await prefs.remove('studyProgram');
+                      await prefs.remove('schoolName');
+
+                      // Navigate to login page (fixed navigation)
+                      if (context.mounted) {
+                        Navigator.pushReplacementNamed(context, 'LoginScreen');
+                      }
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Logged out successfully')),
+                        );
+                      }
+                    } catch (e) {
+                      print('Error signing out: $e');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error signing out: $e')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                  ),
+                ),
+                // Add padding at the bottom to ensure content doesn't get cut off by navigation bar
+                const SizedBox(height: 80),
+              ],
+            ),
           ),
         ),
       ),

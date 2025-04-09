@@ -15,7 +15,9 @@ class StatusPage extends StatefulWidget {
 class _StatusPageState extends State<StatusPage> {
   // User information
   String _fullName = 'User';
-  DateTime _selectedDate = DateTime.now();
+
+  // Today's date
+  DateTime _today = DateTime.now();
 
   // Activity statistics
   int _lockersBooked = 0;
@@ -44,7 +46,6 @@ class _StatusPageState extends State<StatusPage> {
 
     try {
       await _loadUserName();
-      await _loadSelectedDate();
       await _loadActivityData();
 
       setState(() {
@@ -90,43 +91,6 @@ class _StatusPageState extends State<StatusPage> {
     }
   }
 
-  Future<void> _loadSelectedDate() async {
-    try {
-      // Try to get selected date from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final storedDateStr = prefs.getString('selectedDate');
-
-      if (storedDateStr != null) {
-        setState(() {
-          _selectedDate = DateTime.parse(storedDateStr);
-        });
-        return;
-      }
-
-      // If not in SharedPreferences, try Firebase
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-
-        if (userDoc.exists && userDoc.data()?['lastSelectedDate'] != null) {
-          final timestamp = userDoc.data()?['lastSelectedDate'] as Timestamp;
-          setState(() {
-            _selectedDate = timestamp.toDate();
-          });
-          // Save to SharedPreferences for future use
-          await prefs.setString(
-              'selectedDate', _selectedDate.toIso8601String());
-        }
-      }
-    } catch (e) {
-      print('Error loading selected date: $e');
-      rethrow;
-    }
-  }
-
   Future<void> _loadActivityData() async {
     try {
       await _loadLockerHistory();
@@ -141,8 +105,7 @@ class _StatusPageState extends State<StatusPage> {
   Future<void> _loadLockerHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final formattedSelectedDate =
-          DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final formattedToday = DateFormat('yyyy-MM-dd').format(_today);
       _lockerHistory = [];
 
       // Try to get from SharedPreferences first
@@ -150,7 +113,7 @@ class _StatusPageState extends State<StatusPage> {
       if (historyJson != null) {
         final List<dynamic> history = jsonDecode(historyJson);
         for (var item in history) {
-          if (item['date'] == formattedSelectedDate) {
+          if (item['date'] == formattedToday) {
             _lockerHistory.add(Map<String, dynamic>.from(item));
           }
         }
@@ -160,16 +123,11 @@ class _StatusPageState extends State<StatusPage> {
       if (_lockerHistory.isEmpty) {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          final startOfDay = DateTime(
-              _selectedDate.year, _selectedDate.month, _selectedDate.day);
-          // ignore: unused_local_variable
-          final endOfDay = startOfDay.add(const Duration(days: 1));
-
           final querySnapshot = await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .collection('lockerHistory')
-              .where('date', isEqualTo: formattedSelectedDate)
+              .where('date', isEqualTo: formattedToday)
               .get();
 
           for (var doc in querySnapshot.docs) {
@@ -177,17 +135,18 @@ class _StatusPageState extends State<StatusPage> {
           }
 
           // Save to SharedPreferences for offline access
-          List<dynamic> allHistory = [];
-          final allHistoryJson = prefs.getString('lockerHistory');
-          if (allHistoryJson != null) {
-            allHistory = jsonDecode(allHistoryJson);
-            // Remove entries for this date to avoid duplicates
-            allHistory
-                .removeWhere((item) => item['date'] == formattedSelectedDate);
+          if (_lockerHistory.isNotEmpty) {
+            List<dynamic> allHistory = [];
+            final allHistoryJson = prefs.getString('lockerHistory');
+            if (allHistoryJson != null) {
+              allHistory = jsonDecode(allHistoryJson);
+              // Remove entries for this date to avoid duplicates
+              allHistory.removeWhere((item) => item['date'] == formattedToday);
+            }
+            // Add new entries
+            allHistory.addAll(_lockerHistory);
+            prefs.setString('lockerHistory', jsonEncode(allHistory));
           }
-          // Add new entries
-          allHistory.addAll(_lockerHistory);
-          prefs.setString('lockerHistory', jsonEncode(allHistory));
         }
       }
     } catch (e) {
@@ -199,8 +158,7 @@ class _StatusPageState extends State<StatusPage> {
   Future<void> _loadRoomHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final formattedSelectedDate =
-          DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final formattedToday = DateFormat('yyyy-MM-dd').format(_today);
       _roomHistory = [];
 
       // Try to get from SharedPreferences first
@@ -208,7 +166,7 @@ class _StatusPageState extends State<StatusPage> {
       if (historyJson != null) {
         final List<dynamic> history = jsonDecode(historyJson);
         for (var item in history) {
-          if (item['date'] == formattedSelectedDate) {
+          if (item['date'] == formattedToday) {
             _roomHistory.add(Map<String, dynamic>.from(item));
           }
         }
@@ -222,7 +180,7 @@ class _StatusPageState extends State<StatusPage> {
               .collection('users')
               .doc(user.uid)
               .collection('roomHistory')
-              .where('date', isEqualTo: formattedSelectedDate)
+              .where('date', isEqualTo: formattedToday)
               .get();
 
           for (var doc in querySnapshot.docs) {
@@ -230,17 +188,18 @@ class _StatusPageState extends State<StatusPage> {
           }
 
           // Save to SharedPreferences for offline access
-          List<dynamic> allHistory = [];
-          final allHistoryJson = prefs.getString('roomHistory');
-          if (allHistoryJson != null) {
-            allHistory = jsonDecode(allHistoryJson);
-            // Remove entries for this date to avoid duplicates
-            allHistory
-                .removeWhere((item) => item['date'] == formattedSelectedDate);
+          if (_roomHistory.isNotEmpty) {
+            List<dynamic> allHistory = [];
+            final allHistoryJson = prefs.getString('roomHistory');
+            if (allHistoryJson != null) {
+              allHistory = jsonDecode(allHistoryJson);
+              // Remove entries for this date to avoid duplicates
+              allHistory.removeWhere((item) => item['date'] == formattedToday);
+            }
+            // Add new entries
+            allHistory.addAll(_roomHistory);
+            prefs.setString('roomHistory', jsonEncode(allHistory));
           }
-          // Add new entries
-          allHistory.addAll(_roomHistory);
-          prefs.setString('roomHistory', jsonEncode(allHistory));
         }
       }
     } catch (e) {
@@ -268,41 +227,6 @@ class _StatusPageState extends State<StatusPage> {
           _roomVisits.entries.reduce((a, b) => a.value > b.value ? a : b).key;
     } else {
       _mostVisitedRoom = 'None';
-    }
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now()
-          .subtract(const Duration(days: 30)), // Allow viewing past 30 days
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.blue.shade700,
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
-
-      // Save selected date to preferences
-      final prefs = await SharedPreferences.getInstance();
-      prefs.setString('selectedDate', picked.toIso8601String());
-
-      // Reload data for the new date
-      _loadActivityData();
     }
   }
 
@@ -400,9 +324,7 @@ class _StatusPageState extends State<StatusPage> {
           children: [
             _buildHeader(),
             const SizedBox(height: 16),
-            _buildDateSelector(),
-            const SizedBox(height: 16),
-            _buildDailySummary(),
+            _buildTodaySummary(),
             const SizedBox(height: 16),
             _buildLockerUsage(),
             const SizedBox(height: 16),
@@ -449,7 +371,7 @@ class _StatusPageState extends State<StatusPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Daily Activity Status',
+                        'Activity Summary',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -463,6 +385,13 @@ class _StatusPageState extends State<StatusPage> {
                           color: Colors.blue.shade800,
                         ),
                       ),
+                      Text(
+                        'Today: ${DateFormat('EEEE, MMMM d, yyyy').format(_today)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -474,71 +403,7 @@ class _StatusPageState extends State<StatusPage> {
     );
   }
 
-  Widget _buildDateSelector() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: Colors.white.withOpacity(0.85),
-      child: Stack(
-        children: [
-          // Colored overlay with gradient
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.teal.withOpacity(0.1),
-                    Colors.teal.withOpacity(0.3),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          InkWell(
-            onTap: () => _selectDate(context),
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_today, color: Colors.blue.shade800),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Date',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade900,
-                        ),
-                      ),
-                      Text(
-                        DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.blue.shade800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Icon(Icons.arrow_forward_ios,
-                      color: Colors.blue.shade800, size: 16),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDailySummary() {
+  Widget _buildTodaySummary() {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -567,7 +432,7 @@ class _StatusPageState extends State<StatusPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Daily Summary',
+                  'Today\'s Summary',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -579,19 +444,71 @@ class _StatusPageState extends State<StatusPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildStatCard(
-                      'Lockers',
+                      'Lockers Used',
                       '$_lockersBooked',
                       Icons.lock,
                       Colors.purple,
                     ),
                     _buildStatCard(
-                      'Rooms',
+                      'Rooms Visited',
                       '$_totalRoomsVisited',
                       Icons.meeting_room,
                       Colors.teal,
                     ),
                   ],
                 ),
+                if (_totalRoomsVisited > 0) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.teal.withOpacity(0.3), width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Most Visited Room Today',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade900,
+                                ),
+                              ),
+                              Text(
+                                _mostVisitedRoom,
+                                style: TextStyle(
+                                  color: Colors.blue.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.teal.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${_roomVisits[_mostVisitedRoom]}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.teal.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -682,7 +599,7 @@ class _StatusPageState extends State<StatusPage> {
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Text(
-                            'No locker usage recorded for this date',
+                            'No locker usage recorded today',
                             style: TextStyle(
                               color: Colors.blue.shade800,
                               fontStyle: FontStyle.italic,
@@ -690,38 +607,54 @@ class _StatusPageState extends State<StatusPage> {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _lockerHistory.length,
-                        itemBuilder: (context, index) {
-                          final usage = _lockerHistory[index];
-                          final timestamp = usage['timestamp'] is Timestamp
-                              ? (usage['timestamp'] as Timestamp).toDate()
-                              : usage['timestamp'] is String
-                                  ? DateTime.parse(usage['timestamp'])
-                                  : DateTime.now();
-
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.purple.shade100,
-                              child: Icon(Icons.lock,
-                                  color: Colors.purple.shade700),
-                            ),
-                            title: Text(
-                              'Locker Usage #${index + 1}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade900,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Time: ${DateFormat('hh:mm a').format(timestamp)}',
-                              style: TextStyle(color: Colors.blue.shade800),
-                            ),
-                          );
-                        },
+                    : Column(
+                        children: [
+                          for (int index = 0;
+                              index < _lockerHistory.length;
+                              index++)
+                            _buildLockerHistoryItem(
+                                index, _lockerHistory[index]),
+                        ],
                       ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLockerHistoryItem(int index, Map<String, dynamic> usage) {
+    final timestamp = usage['timestamp'] is Timestamp
+        ? (usage['timestamp'] as Timestamp).toDate()
+        : usage['timestamp'] is String
+            ? DateTime.parse(usage['timestamp'])
+            : DateTime.now();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: Colors.purple.shade100,
+            child: Icon(Icons.lock, color: Colors.purple.shade700),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Locker Usage #${index + 1}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+                Text(
+                  'Time: ${DateFormat('hh:mm a').format(timestamp)}',
+                  style: TextStyle(color: Colors.blue.shade800),
+                ),
               ],
             ),
           ),
@@ -763,7 +696,7 @@ class _StatusPageState extends State<StatusPage> {
                     Icon(Icons.meeting_room, color: Colors.teal.shade700),
                     const SizedBox(width: 8),
                     Text(
-                      'Room Usage',
+                      'Room Visits',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -772,65 +705,13 @@ class _StatusPageState extends State<StatusPage> {
                     ),
                   ],
                 ),
-                if (_totalRoomsVisited > 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: Colors.teal.withOpacity(0.3), width: 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.star, color: Colors.amber),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Most Visited Room',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade900,
-                                ),
-                              ),
-                              Text(
-                                _mostVisitedRoom,
-                                style: TextStyle(
-                                  color: Colors.blue.shade800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.teal.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${_roomVisits[_mostVisitedRoom]}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.teal.shade700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 _roomHistory.isEmpty
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
                           child: Text(
-                            'No room usage recorded for this date',
+                            'No room visits recorded today',
                             style: TextStyle(
                               color: Colors.blue.shade800,
                               fontStyle: FontStyle.italic,
@@ -838,39 +719,46 @@ class _StatusPageState extends State<StatusPage> {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _roomHistory.length,
-                        itemBuilder: (context, index) {
-                          final usage = _roomHistory[index];
-                          final roomName = usage['roomName'] as String;
-                          final timestamp = usage['timestamp'] is Timestamp
-                              ? (usage['timestamp'] as Timestamp).toDate()
-                              : usage['timestamp'] is String
-                                  ? DateTime.parse(usage['timestamp'])
-                                  : DateTime.now();
-
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.teal.shade100,
-                              child: Icon(Icons.meeting_room,
-                                  color: Colors.teal.shade700),
-                            ),
-                            title: Text(
-                              roomName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade900,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Time: ${DateFormat('hh:mm a').format(timestamp)}',
-                              style: TextStyle(color: Colors.blue.shade800),
-                            ),
-                          );
-                        },
+                    : Column(
+                        children: [
+                          for (var roomName in _roomVisits.keys)
+                            _buildRoomVisitItem(
+                                roomName, _roomVisits[roomName]!),
+                        ],
                       ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoomVisitItem(String roomName, int visitCount) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: Colors.teal.shade100,
+            child: Icon(Icons.meeting_room, color: Colors.teal.shade700),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  roomName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+                Text(
+                  'Visits today: $visitCount',
+                  style: TextStyle(color: Colors.blue.shade800),
+                ),
               ],
             ),
           ),

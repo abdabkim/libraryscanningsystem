@@ -568,7 +568,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'Welcome, $_fullName',
           style: const TextStyle(color: Colors.white),
         ),
-        backgroundColor: Colors.blue.shade700,
+        backgroundColor: Colors.blue.shade900,
         actions: [
           IconButton(
             icon: const Icon(
@@ -583,7 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.blue.shade700,
+        backgroundColor: Colors.blue.shade900,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white.withOpacity(0.6),
         currentIndex: _currentIndex,
